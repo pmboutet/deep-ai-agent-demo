@@ -321,8 +321,22 @@ export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
   );
 
   const replayAudio = useCallback((audioData: ArrayBuffer) => {
-    const audioContext = new (window.AudioContext ||
-      (window as any).webkitAudioContext)();
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const AudioCtor =
+      window.AudioContext ||
+      (window as unknown as {
+        webkitAudioContext?: typeof AudioContext;
+      }).webkitAudioContext;
+
+    if (!AudioCtor) {
+      console.error("Web Audio API is not supported in this environment.");
+      return;
+    }
+
+    const audioContext = new AudioCtor();
     const audioDataView = new Int16Array(audioData);
 
     if (!audioDataView.length) {
@@ -541,25 +555,31 @@ export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
     [handleSocketClose],
   );
 
-  const { sendMessage, readyState, getWebSocket } = useWebSocket(socketURL, {
-    share: false,
-    shouldReconnect: () => true,
-    retryOnError: true,
-    onOpen: () => {
-      const socket = getWebSocket();
-      if (socket instanceof WebSocket) {
-        socket.binaryType = "arraybuffer";
-      }
-      setConnection(true);
-      sendMessage(JSON.stringify(agentRequest));
+  const { sendMessage, readyState, getWebSocket } = useWebSocket(
+    socketURL ?? null,
+    {
+      share: false,
+      shouldReconnect: () => Boolean(socketURL),
+      retryOnError: true,
+      onOpen: () => {
+        const socket = getWebSocket();
+        if (socket instanceof WebSocket) {
+          socket.binaryType = "arraybuffer";
+        }
+        setConnection(true);
+        sendMessage(JSON.stringify(agentRequest));
+      },
+      onClose: handleSocketClose,
+      onError: handleSocketError,
+      onMessage: handleUpstreamMessage,
     },
-    onClose: handleSocketClose,
-    onError: handleSocketError,
-    onMessage: handleUpstreamMessage,
-  });
+  );
 
   const startStreaming = useCallback(async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
       console.error("getUserMedia is not supported in this browser.");
       return;
     }
