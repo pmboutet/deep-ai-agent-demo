@@ -4,6 +4,7 @@ import React, {
   ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -208,9 +209,14 @@ export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
   const scheduledStartRef = useRef(0);
   const incomingMessageRef = useRef<Message | null>(null);
 
-  const socketURL = useMemo(() => {
+  const [socketURL, setSocketURL] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${protocol}://${window.location.host}/api/agent`;
+    setSocketURL(`${protocol}://${window.location.host}/api/agent`);
   }, []);
 
   const agentRequest = useMemo(
