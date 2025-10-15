@@ -17,7 +17,14 @@ const READY_STATES = {
 } as const;
 
 export async function GET(request: NextRequest) {
+  const requestId =
+    request.headers.get("x-vercel-id") ??
+    `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const log = (...args: unknown[]) =>
+    console.log("[agent-route]", `[req:${requestId}]`, ...args);
+
   if (!config.deepGramApiKey) {
+    log("Missing DEEPGRAM_API_KEY environment variable");
     return NextResponse.json(
       { error: "Deepgram API key is not configured." },
       { status: 500 },
@@ -25,6 +32,9 @@ export async function GET(request: NextRequest) {
   }
 
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+    log("Rejected because Upgrade header is missing or invalid", {
+      upgrade: request.headers.get("upgrade"),
+    });
     return NextResponse.json(
       { error: "Expected a WebSocket upgrade request." },
       { status: 400 },
@@ -37,6 +47,17 @@ export async function GET(request: NextRequest) {
     config.llmModel ||
     (llmProvider ? BYO_DEFAULT_MODELS[llmProvider] : undefined);
   const shouldInjectExternalLlm = Boolean(llmProvider && llmApiKey);
+  const maskedKey =
+    config.deepGramApiKey.length > 10
+      ? `${config.deepGramApiKey.slice(0, 5)}...${config.deepGramApiKey.slice(-4)}`
+      : "<redacted>";
+
+  log("Incoming WebSocket upgrade", {
+    url: request.url,
+    llmProvider,
+    llmModel,
+    shouldInjectExternalLlm,
+  });
 
   const injectExternalThinkSettings = (message: string): string | null => {
     if (!shouldInjectExternalLlm) {
@@ -70,7 +91,7 @@ export async function GET(request: NextRequest) {
 
       return JSON.stringify(parsed);
     } catch (error) {
-      console.error("Failed to augment agent request for BYO LLM", error);
+      log("Failed to augment agent request for BYO LLM", error);
       return null;
     }
   };
@@ -78,14 +99,21 @@ export async function GET(request: NextRequest) {
   type ServerWebSocket = WebSocket & { accept: () => void };
   type WebSocketResponseInit = ResponseInit & { webSocket: WebSocket };
 
-  if (!(globalThis as any).WebSocketPair) {
-    return NextResponse.json(
-      { error: "WebSocketPair is not supported in this environment." },
-      { status: 500 },
-    );
+  let WebSocketPairCtor: any = (globalThis as any).WebSocketPair;
+  if (!WebSocketPairCtor) {
+    try {
+      const streamWeb = await import("node:stream/web");
+      WebSocketPairCtor = streamWeb.WebSocketPair;
+    } catch (error) {
+      log("WebSocketPair is not available in this environment.", error);
+      return NextResponse.json(
+        { error: "WebSocketPair is not supported in this environment." },
+        { status: 500 },
+      );
+    }
   }
 
-  const pair = new (globalThis as any).WebSocketPair();
+  const pair = new WebSocketPairCtor();
   const [client, upstream] = Object.values(pair) as [WebSocket, ServerWebSocket];
 
   const deepgramSocket = new WebSocket(DEEPGRAM_AGENT_URL, [
@@ -93,6 +121,11 @@ export async function GET(request: NextRequest) {
     config.deepGramApiKey,
   ]);
   deepgramSocket.binaryType = "arraybuffer";
+
+  log("Attempting upstream connection to Deepgram", {
+    endpoint: DEEPGRAM_AGENT_URL,
+    apiKey: maskedKey,
+  });
 
   const closeUpstream = (code = 1011, reason?: string) => {
     try {
@@ -121,33 +154,53 @@ export async function GET(request: NextRequest) {
   };
 
   deepgramSocket.addEventListener("open", () => {
-    console.log("Connected to Deepgram Voice Agent.");
+    log("Connected to Deepgram Voice Agent");
   });
 
   deepgramSocket.addEventListener("message", (event) => {
     try {
       if (upstream.readyState === READY_STATES.OPEN) {
         upstream.send(event.data);
+      } else {
+        log("Upstream (client) socket not open when forwarding message", {
+          readyState: upstream.readyState,
+        });
       }
     } catch (error) {
-      console.error("Error forwarding message to client", error);
+      log("Error forwarding message to client", error);
       closeUpstream(1011, "Forwarding error");
     }
   });
 
   deepgramSocket.addEventListener("close", (event) => {
+    log("Deepgram socket closed", {
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean,
+    });
     closeClient(event.code, event.reason);
   });
 
   deepgramSocket.addEventListener("error", (event) => {
-    console.error("Deepgram socket error", event);
+    log("Deepgram socket error", event);
     closeClient(1011, "Deepgram upstream error");
   });
 
   upstream.accept();
+  log("Accepted client WebSocket");
 
   upstream.addEventListener("message", (event) => {
     if (deepgramSocket.readyState !== READY_STATES.OPEN) {
+      log("Dropping client message because Deepgram socket not open yet", {
+        readyState: deepgramSocket.readyState,
+        isString: typeof event.data === "string",
+        length:
+          typeof event.data === "string"
+            ? event.data.length
+            : event.data instanceof ArrayBuffer
+            ? event.data.byteLength
+            : undefined,
+      });
       return;
     }
 
@@ -155,24 +208,31 @@ export async function GET(request: NextRequest) {
       if (shouldInjectExternalLlm && typeof event.data === "string") {
         const mutated = injectExternalThinkSettings(event.data as string);
         if (mutated) {
+          log("Forwarding agent-request with BYO think settings");
           deepgramSocket.send(mutated);
           return;
         }
+        log("Agent-request did not require BYO modifications");
       }
 
       deepgramSocket.send(event.data);
     } catch (error) {
-      console.error("Error forwarding message to Deepgram", error);
+      log("Error forwarding message to Deepgram", error);
       closeClient(1011, "Forwarding error");
     }
   });
 
   upstream.addEventListener("close", (event) => {
+    log("Client socket closed", {
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean,
+    });
     closeUpstream(event.code, event.reason);
   });
 
   upstream.addEventListener("error", (event) => {
-    console.error("Client socket error", event);
+    log("Client socket error", event);
     closeUpstream(1011, "Client error");
   });
 
@@ -181,5 +241,6 @@ export async function GET(request: NextRequest) {
     webSocket: client,
   };
 
+  log("Handshake complete, returning 101 Switching Protocols");
   return new Response(null, responseInit);
 }
