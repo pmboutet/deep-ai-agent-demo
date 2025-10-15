@@ -1,6 +1,6 @@
-import { Message } from "ai/react";
 import { TextContent } from "./TextContext";
 import { UserAvatar } from "./UserAvatar";
+import type { Message } from "../context/WebSocketContext";
 
 export const RightBubble = ({
   message,

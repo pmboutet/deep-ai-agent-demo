@@ -13,7 +13,7 @@ import { systemContent } from "../lib/constants";
 
 type Role = "user" | "model";
 
-type Message = {
+export type Message = {
   id: string;
   role: Role;
   content: string;
