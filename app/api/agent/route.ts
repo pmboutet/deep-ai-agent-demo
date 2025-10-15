@@ -75,8 +75,10 @@ export async function GET(request: NextRequest) {
     }
   };
 
+  type ServerWebSocket = WebSocket & { accept: () => void };
+
   const pair = new (globalThis as any).WebSocketPair();
-  const [client, upstream] = Object.values(pair) as [WebSocket, WebSocket];
+  const [client, upstream] = Object.values(pair) as [WebSocket, ServerWebSocket];
 
   const deepgramSocket = new WebSocket(DEEPGRAM_AGENT_URL, [
     "token",
