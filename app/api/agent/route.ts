@@ -99,18 +99,29 @@ export async function GET(request: NextRequest) {
   type ServerWebSocket = WebSocket & { accept: () => void };
   type WebSocketResponseInit = ResponseInit & { webSocket: WebSocket };
 
-  let WebSocketPairCtor: any = (globalThis as any).WebSocketPair;
+  const WebSocketPairCtor: any = (globalThis as any).WebSocketPair;
   if (!WebSocketPairCtor) {
-    try {
-      const streamWeb = await import("node:stream/web");
-      WebSocketPairCtor = streamWeb.WebSocketPair;
-    } catch (error) {
-      log("WebSocketPair is not available in this environment.", error);
-      return NextResponse.json(
-        { error: "WebSocketPair is not supported in this environment." },
-        { status: 500 },
-      );
-    }
+    const runtimeInfo =
+      typeof process !== "undefined"
+        ? {
+            runtime: process.env.NEXT_RUNTIME,
+            nodeEnv: process.env.NODE_ENV,
+          }
+        : {
+            runtime: "edge",
+            nodeEnv: "edge",
+          };
+    log(
+      "WebSocketPair constructor is missing. This environment does not support Edge-style WebSockets.",
+      runtimeInfo,
+    );
+    return NextResponse.json(
+      {
+        error:
+          "WebSocketPair is not supported in this environment. Try running `vercel dev` locally or deploy to an Edge-capable runtime.",
+      },
+      { status: 500 },
+    );
   }
 
   const pair = new WebSocketPairCtor();
