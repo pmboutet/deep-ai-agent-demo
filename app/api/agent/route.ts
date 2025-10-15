@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
   };
 
   type ServerWebSocket = WebSocket & { accept: () => void };
+  type WebSocketResponseInit = ResponseInit & { webSocket: WebSocket };
 
   const pair = new (globalThis as any).WebSocketPair();
   const [client, upstream] = Object.values(pair) as [WebSocket, ServerWebSocket];
@@ -168,8 +169,10 @@ export async function GET(request: NextRequest) {
     closeUpstream(1011, "Client error");
   });
 
-  return new NextResponse(null, {
+  const responseInit: WebSocketResponseInit = {
     status: 101,
     webSocket: client,
-  });
+  };
+
+  return new NextResponse(null, responseInit);
 }
