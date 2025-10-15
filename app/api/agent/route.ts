@@ -78,11 +78,18 @@ export async function GET(request: NextRequest) {
   type ServerWebSocket = WebSocket & { accept: () => void };
   type WebSocketResponseInit = ResponseInit & { webSocket: WebSocket };
 
+  if (!(globalThis as any).WebSocketPair) {
+    return NextResponse.json(
+      { error: "WebSocketPair is not supported in this environment." },
+      { status: 500 },
+    );
+  }
+
   const pair = new (globalThis as any).WebSocketPair();
   const [client, upstream] = Object.values(pair) as [WebSocket, ServerWebSocket];
 
   const deepgramSocket = new WebSocket(DEEPGRAM_AGENT_URL, [
-    "token",
+    "bearer",
     config.deepGramApiKey,
   ]);
   deepgramSocket.binaryType = "arraybuffer";
@@ -174,5 +181,5 @@ export async function GET(request: NextRequest) {
     webSocket: client,
   };
 
-  return new NextResponse(null, responseInit);
+  return new Response(null, responseInit);
 }
