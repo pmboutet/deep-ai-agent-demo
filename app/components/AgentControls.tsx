@@ -1,20 +1,35 @@
 import { Tooltip } from "@nextui-org/react";
-import { useCallback } from "react";
+import { useCallback, useMemo, type MouseEvent } from "react";
 import { MicrophoneIcon } from "./icons/MicrophoneIcon";
 import { useWebSocketContext } from "../context/WebSocketContext";
 
+const formatVoiceName = (model: string) => {
+  if (!model) {
+    return "Unknown voice";
+  }
+
+  const cleaned = model.replace(/^aura[-_]?/i, "").replace(/[-_]/g, " ");
+  return cleaned
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
 export const AgentSettings = () => {
+  const { voice } = useWebSocketContext();
+
+  const voiceLabel = useMemo(() => formatVoiceName(voice), [voice]);
+
   return (
-    <>
-      <div className="flex items-center gap-2.5 text-sm mr-4">
-        <span className="hidden md:inline-block text-white/50 font-inter">
-          LLM: <span className="text-white">Open AI gpt-4o-mini</span>
-        </span>
-        <span className="hidden md:inline-block text-white/50 font-inter">
-          Voice: <span className="text-white">Thalia</span>
-        </span>
-      </div>
-    </>
+    <div className="flex items-center gap-2.5 text-sm mr-4 text-white/50 font-inter">
+      <span className="hidden md:inline-block">
+        Agent: <span className="text-white">Deepgram Voice Agent API</span>
+      </span>
+      <span className="hidden md:inline-block">
+        Voice: <span className="text-white">{voiceLabel}</span>
+      </span>
+    </div>
   );
 };
 
@@ -23,19 +38,16 @@ export const AgentControls = () => {
     useWebSocketContext();
 
   const microphoneToggle = useCallback(
-    async (e: Event) => {
-      e.preventDefault();
-      console.log("toogle the control");
+    async (event: MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
       if (!microphoneOpen) {
-        startStreaming();
+        await startStreaming();
       } else {
         stopStreaming();
       }
     },
     [microphoneOpen, startStreaming, stopStreaming]
   );
-
-  console.log("microphone control rendering");
 
   return (
     <div className="relative">
@@ -44,16 +56,17 @@ export const AgentControls = () => {
       </div>
       <div className="flex bg-[#101014] rounded-full justify-center">
         <span
-          className={`rounded-full p-0.5 ${microphoneOpen
-            ? "bg-gradient-to-r bg-gradient to-[#13EF93]/50 from-red-500"
-            : "bg-gradient-to-r bg-gradient to-[#13EF93]/50 from-[#149AFB]/80"
-            }`}
+          className={`rounded-full p-0.5 ${
+            microphoneOpen
+              ? "bg-gradient-to-r bg-gradient to-[#13EF93]/50 from-red-500"
+              : "bg-gradient-to-r bg-gradient to-[#13EF93]/50 from-[#149AFB]/80"
+          }`}
         >
           <Tooltip showArrow content="Toggle microphone on/off.">
             <a
               href="#"
-              onClick={(e: any) => microphoneToggle(e)}
-              className={`rounded-full w-16 md:w-20 sm:w-24 py-2 md:py-4 px-2 h-full sm:px-8 font-bold bg-[#101014] text-light-900 text-sm sm:text-base flex items-center justify-center group`}
+              onClick={microphoneToggle}
+              className="rounded-full w-16 md:w-20 sm:w-24 py-2 md:py-4 px-2 h-full sm:px-8 font-bold bg-[#101014] text-light-900 text-sm sm:text-base flex items-center justify-center group"
             >
               {microphoneOpen && (
                 <div className="w-auto items-center justify-center hidden sm:flex absolute shrink-0">
@@ -66,7 +79,7 @@ export const AgentControls = () => {
               <div className="w-auto flex items-center justify-center shrink-0">
                 <MicrophoneIcon
                   micOpen={microphoneOpen}
-                  className="h-5 md:h-6 "
+                  className="h-5 md:h-6"
                 />
               </div>
             </a>

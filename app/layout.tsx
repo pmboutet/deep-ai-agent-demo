@@ -10,7 +10,6 @@ import "./globals.css";
 
 import type { Metadata, Viewport } from "next";
 import { WebSocketProvider } from "./context/WebSocketContext";
-import { AuthContextProvider } from "./context/Auth";
 
 const inter = Inter({ subsets: ["latin"] });
 const favorit = localFont({
@@ -49,9 +48,7 @@ export default function RootLayout({
         )}`}
       >
         <ToastContextProvider>
-          <AuthContextProvider>
-            <WebSocketProvider>{children}</WebSocketProvider>
-          </AuthContextProvider>
+          <WebSocketProvider>{children}</WebSocketProvider>
         </ToastContextProvider>
         <GoogleTagManager gtmId="GTM-5R73N627" />
         <Script

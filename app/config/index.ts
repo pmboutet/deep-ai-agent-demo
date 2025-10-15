@@ -1,11 +1,11 @@
-const secret = process.env.JWT_SECRET || 'deepgram-secret';
-const deepGramUri = process.env.DEEPGRAM_STT_DOMAIN;
 const deepGramApiKey = process.env.DEEPGRAM_API_KEY;
-const deepGramEnv = process.env.DEEPGRAM_ENV;
+const llmProvider = process.env.LLM_PROVIDER;
+const llmApiKey = process.env.LLM_API_KEY;
+const llmModel = process.env.LLM_MODEL;
 
 export const config = {
-    jwtSecret: secret,
-    deepGramUri,
-    deepGramApiKey,
-    deepGramEnv,
-}
+  deepGramApiKey,
+  llmProvider,
+  llmApiKey,
+  llmModel,
+};
