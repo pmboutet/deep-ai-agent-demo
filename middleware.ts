@@ -33,6 +33,10 @@ const corsOptions: {
  * by the `config` object at the end of the file.
  */
 export function middleware(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api/agent")) {
+    return NextResponse.next();
+  }
+
   // Response
   const response = NextResponse.next();
 
@@ -73,5 +77,5 @@ export function middleware(request: NextRequest) {
 
 // See "Matching Paths" below to learn more
 export const config = {
-  matcher: ["/api/(?!agent).*"],
+  matcher: "/api/:path*",
 };
